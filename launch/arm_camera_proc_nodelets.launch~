@@ -1,0 +1,27 @@
+<launch>
+  <arg name="manager" default="baxter_camera_proc"/> <!-- Must be globally qualified -->
+  <arg name="respawn" default="false" />
+  <arg name="arm" default="left" />
+
+  <group ns="/cameras/$(arg arm)_hand_camera">
+
+  <arg     if="$(arg respawn)" name="bond" value="" />
+  <arg unless="$(arg respawn)" name="bond" value="--no-bond" />
+
+  <!-- Debayered images -->
+  <node pkg="nodelet" type="nodelet" name="$(arg arm)_debayer"
+        args="load image_proc/debayer $(arg manager) $(arg bond)"
+	respawn="$(arg respawn)">
+    <remap from="image" to="image_raw" />
+  </node>
+
+  <!-- Color rectified image -->
+  <node pkg="nodelet" type="nodelet" name="$(arg arm)_rectify_color"
+        args="load image_proc/rectify $(arg manager) $(arg bond)"
+	respawn="$(arg respawn)">
+    <remap from="image_mono" to="image" />
+    <remap from="image_rect" to="image_rect" />
+  </node>  
+
+  </group>
+</launch>

@@ -1,0 +1,12 @@
+<launch>
+	<include file="$(find baxter_camera_to_base_calibrator)/launch/arm_to_camera_checkerboard_detector.launch">
+		 <arg name="arm" value="right"/>
+	</include>
+	<include file="$(find baxter_camera_to_base_calibrator)/launch/arm_to_camera_checkerboard_detector.launch">
+		 <arg name="arm" value="left"/>
+	</include>	
+	<!-- Set this guy up to read from a yaml file to get its initial transform -->
+	<!--<node pkg="semi_static_transform_publisher" type="semi_static_transform_publisher" name="semi_static_base_publisher"/> -->
+	<node pkg="baxter_camera_to_base_calibrator" type="calibrate_cameras.py" name="baxter_camera_calibrator" />
+
+</launch>

@@ -1,0 +1,98 @@
+#!/usr/bin/env python
+import rospy
+import sensor_msgs.msg
+import tf
+import tf_conversions
+import cv_bridge
+import cv
+import pose_msgs
+import pose_msgs.srv
+import std_srvs.srv._Empty
+
+
+def init_node():
+    #if the node is not already initialized, initialize it
+    if rospy.get_name() =='/unnamed':
+        rospy.init_node('calibrate_cameras')
+    global tf_listener
+    if not tf_listener:
+        tf_listener = tf.TransformListener()
+
+
+def get_image_and_transform():
+    init_node()
+    global tf_listener
+    image = rospy.wait_for_message('/cameras/right_hand_camera/image',sensor_msgs.msg.Image)
+    tf_listener.waitForTransform('/base',image.header.frame_id, rospy.Time(0), rospy.Duration(2))
+    image_tf = tf_listener.lookupTransform('/base',image.header.frame_id, rospy.Time(0))
+    print image_tf
+    image_transform = tf_conversions.toMatrix((tf_conversions.fromTf(image_tf)))
+    
+    return image, image_transform
+
+
+def save_image_and_transform():
+    bridge = cv_bridge.CvBridge()
+    image, transform = get_image_and_transform()
+    cv_image = bridge.imgmsg_to_cv(image, "bgr8")
+    transform_file = open('transform%d.txt'%(image.header.stamp.secs),'w')
+    transform_file.write('%s'%(transform))
+    cv.SaveImage('image%d.png'%(image.header.stamp.secs),cv_image)
+
+
+
+#Create two services that when they recieve a command send a command to the checkerboard detectors for their respective arm and then update the static pose from base to the world
+
+class CheckerboardTransformUpdater(object):
+    def __init__(self, arm="right"):
+        self.arm = arm
+        self.service_server = rospy.Service('%s_arm_calibrate_base'%(self.arm), std_srvs.srv.Empty, self.service_callback)
+        try:
+            print "hello"
+            rospy.wait_for_service('/right_checkerboard_pose/get_pose')
+            print "world"
+            self.checkerboard_service_client = rospy.ServiceProxy('/right_checkerboard_pose/get_pose', pose_msgs.srv.GetOose)
+        except Exception as e:
+           #rospy.logerr("Failed to find checkerboard service client %s"%(e))
+           print "error"
+           exit(-1)
+    """
+            try:
+               rospy.wait_for_service('/name')
+               self.semi_static_transform_client = rospy.ServiceProxy('/service_uri', service.srv.service_type)
+            except Exception as e:
+               rospy.logerror("Failed to find static transform service client %s"%(e))
+               exit(-1)
+            self.last_pose
+    """
+    def service_callback(self, service_request):
+       checkboard_service_request = pose_msgs.srv.GetPose()
+       pose_response = self.checkerboard_service_client(checkerboard_service_request)
+       if(pose_response.success):
+          self.update_base_pose(pose_response.pose)
+
+    def update_base_pose(self, pose):
+        camera_frame_id = '/%s_camera_frame_id'%(self.arm)
+
+        tf_listener.waitForTransform('/base',camera_frame_id, rospy.Time(0), rospy.Duration(2))
+        image_tf = tf_listener.lookupTransform('/base',image.header.frame_id, rospy.Time(0))
+        camera_transform = tf_conversions.toMatrix((tf_conversions.fromTf(image_tf)))
+        checkerboard_in_camera = tf_conversions.toMatrix((tf_conversions.fromMsg(pose)))
+        checkerboard_in_body = camera_transform * checkerboard_in_camera
+        checkerboard_in_body_tf = tf_conversions.toTf(tf_conversions.toMatrix(checkerboard_in_body))
+        checkerboard_rpy = tf.transformations.quaternion_to_euler(*checkerboard_in_body_tf[1])
+
+        static_update_request = update_transform(checkboard_body_in_tf[0] + checkerboard_rpy)
+        self.semi_static_transform_client(static_update_request)
+
+
+
+if __name__ == "__main__":
+    rospy.init_node("checkerboard_transform_updater")
+    left_arm = CheckerboardTransformUpdater("left")
+    #right_arm = CheckerboardTransformUpdater("right")
+    print "here i am!!"
+    while not rospy.is_shutdown():
+        rospy.spin()
+
+

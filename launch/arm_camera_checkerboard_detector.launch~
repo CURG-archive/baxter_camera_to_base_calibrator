@@ -1,0 +1,31 @@
+<launch>  
+  <arg name="arm" default="head"/>
+  <arg name="check_size" value="0.027"/>
+  <arg name="board_width" value="6" />
+  <arg name="board_height" value="7" />
+  <include file="$(find baxter_camera_to_base_calibrator)/launch/arm_camera_proc_nodelets.launch">
+    <arg name="arm" value="$(arg arm)"/>
+ </include>
+  <node pkg="checkerboard_detection" type="checkerboard_pose" name="$(arg arm)_checkerboard_pose" output="screen">
+    <param name="base_frame" type="string"  value="/$(arg arm)_hand_camera_axis" />
+    <param name="frame_id" type="string" value="/board"/>
+    <param name="marker_ns" type="string" value="/$(arg arm)_hand_camera"/>
+    <param name="pose_file" value="$(find checkerboard_detection)/cfg/pose.yml" />
+    <param name="read_pose_file" type="bool" value="false"/>
+    <param name="service_name" type="string" value="get_pose" />
+    <param name="draw_debug_image" type="bool" value="false"/> <!-- debug only works for publish_camera_pose = false -->
+    <param name="publish_tf_link" type="bool" value="true"/>
+    <param name="publish_rviz_marker" type="bool" value="true"/>
+    <param name="publish_last_success" type="bool" value="true"/>
+    <param name="publish_camera_pose" type="bool" value="false"/>
+    <param name="use_sub_pixel" type="bool" value="false"/>
+    <param name="checkerboard_width" type="int" value="$(arg board_width)"/>
+    <param name="checkerboard_height" type="int" value="$(arg board_height)"/>
+    <param name="checkerboard_box_width" type="double" value="$(arg check_size)"/>
+    <param name="checkerboard_box_height" type="double" value="$(arg check_size)"/>
+    <param name="frame_rate" value="10" />
+    <param name="skip_frames" value="1" />
+    <remap from="image" to="/cameras/$(arg arm)_hand_camera/image" />
+    <remap from="camera_info" to="/cameras/$(arg arm)_hand_camera/camera_info" />
+  </node>  
+</launch>
