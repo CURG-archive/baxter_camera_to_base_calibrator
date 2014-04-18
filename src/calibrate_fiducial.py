@@ -6,6 +6,7 @@ import pdb
 import numpy
 import scipy
 import scipy.optimize
+import sys
 run_pdb = False
 
 
@@ -56,11 +57,16 @@ def get_transform_lists(bag_file_name):
     listener.setUsingDedicatedThread(True)
     checkerboard_in_camera_trans = []
     wrist_in_body_trans = []
-    pdb.set_trace()
+    #pdb.set_trace()
     camera_in_body_estimate = None
     checkerboard_to_wrist_estimate = None
     bag = rosbag.Bag(bag_file_name)
-    for topic, message, time in bag.read_messages('/tf'):
+
+    tf_header_ids = set()
+    tf_child_ids = set()
+
+    for topic, message, time in bag.read_messages(topics=['tf', '/tf']):
+
         for tf_message_stamped in message.transforms:
             tf_message = tf_message_stamped.transform
             translation = [tf_message.translation.x, tf_message.translation.y, tf_message.translation.z]
@@ -68,8 +74,18 @@ def get_transform_lists(bag_file_name):
             broadcaster.sendTransform( translation, rotation, rospy.Time.now(), tf_message_stamped.child_frame_id, tf_message_stamped.header.frame_id)
             tf_message_stamped.header.stamp = rospy.Time.now()
             listener.setTransform(tf_message_stamped,"user")
+
         for tf_message in message.transforms:
-            if tf_message.header.frame_id == '/wrist_board' or tf_message.child_frame_id == '/wrist_board':
+            if tf_message.header.frame_id not in tf_header_ids:
+                tf_header_ids.add(tf_message.header.frame_id)
+                print 'found new frame %s' % tf_message.header.frame_id
+
+            if tf_message.child_frame_id not in tf_child_ids:
+                tf_child_ids.add(tf_message.child_frame_id)
+                print 'found new child frame %s' % tf_message.child_frame_id
+
+            if 'wrist_board' in tf_message.header.frame_id or 'wrist_board' in tf_message.child_frame_id:
+                print 'found keyframe'
                 if camera_in_body_estimate is None:
                     try:
                         listener.waitForTransform('/camera_link','/world',rospy.Time(0), rospy.Duration(.01))
@@ -78,16 +94,18 @@ def get_transform_lists(bag_file_name):
                         print "got camera to world transform"
                         camera_in_body_estimate = tf_conversions.toMatrix(tf_conversions.fromTf(camera_in_body_tf))
                     except:
+                        print 'could not get camera to world transform, skipping. Are you sure you ran tf between camera_link and world?'
                         continue
                     print "got camera to world estimate"
-                if checkerboard_to_wrist_estimate == None:
+
+                if checkerboard_to_wrist_estimate is None:
                     try:
 
-                        listener.waitForTransform('/wrist_board','/left_wrist',rospy.Time(0), rospy.Duration(.01))
-                        #(trans, rot) = listener.lookupTransform('/wrist_board','/left_wrist',rospy.Time(0))
+                        listener.waitForTransform('/wrist_board','/left_lower_forearm',rospy.Time(0), rospy.Duration(.01))
+                        #(trans, rot) = listener.lookupTransform('/wrist_board','/left_lower_forearm',rospy.Time(0))
                         #print trans
                         #print rot
-                        checkerboard_to_wrist_tf = listener.lookupTransform('/wrist_board','/left_wrist',rospy.Time(0))
+                        checkerboard_to_wrist_tf = listener.lookupTransform('/wrist_board','/left_lower_forearm',rospy.Time(0))
                         #print checkerboard_to_wrist_tf
                         #raw_input("press a key")
 
@@ -98,29 +116,26 @@ def get_transform_lists(bag_file_name):
                         checkerboard_to_wrist_estimate = tf_conversions.toMatrix(tf_conversions.fromTf(checkerboard_to_wrist_tf))
                         
                     except:
+                        print 'could not get wristboard to left_lower_forearm, skipping'
                         continue
                     print "got wristboard in wrist estimate"
                 try:
                     listener.waitForTransform('/wrist_board','/camera_link',rospy.Time(0), rospy.Duration(.01))
-                    listener.waitForTransform('/left_wrist','/world',rospy.Time(0), rospy.Duration(.1))
+                    listener.waitForTransform('/left_lower_forearm','/world',rospy.Time(0), rospy.Duration(.1))
 
                     checkerboard_tf = listener.lookupTransform('/wrist_board','/camera_link',rospy.Time(0))
                     #print "got wristboard in camera"
 
                     checkerboard_in_camera_trans.append(tf_conversions.toMatrix(tf_conversions.fromTf(checkerboard_tf)))
-                    
+
                     #print "got left wrist in world"
-                    wrist_in_body_tf = listener.lookupTransform('/left_wrist','/world',rospy.Time(0))
+                    wrist_in_body_tf = listener.lookupTransform('/left_lower_forearm','/world',rospy.Time(0))
                     wrist_in_body_trans.append(tf_conversions.toMatrix(tf_conversions.fromTf(wrist_in_body_tf)))
                 except:
                     continue
                 #print "finished loop"
-                    
 
     return checkerboard_in_camera_trans, wrist_in_body_trans, camera_in_body_estimate, checkerboard_to_wrist_estimate
-                
-                
-
 
 def estimate_kinect_to_base(bag_file_name):
     numpy_file_name = bag_file_name.split('.')[0]
@@ -128,7 +143,9 @@ def estimate_kinect_to_base(bag_file_name):
     wrist_in_body_trans = []
     camera_in_body_estimate = [] 
     checkerboard_to_wrist_estimate = []
-    
+
+    print 'numpy file name %s' % numpy_file_name
+
     try:
         npzfile = numpy.load(numpy_file_name + '.npz')
         checkerboard_in_camera_trans = npzfile['checkerboard_in_camera_trans']
@@ -137,10 +154,11 @@ def estimate_kinect_to_base(bag_file_name):
         checkerboard_to_wrist_estimate = npzfile['checkerboard_to_wrist_estimate']
         print 'loaded data from file'
     except:
+        print 'generating numpy file'
         checkerboard_in_camera_trans, wrist_in_body_trans, camera_in_body_estimate, checkerboard_to_wrist_estimate = get_transform_lists(bag_file_name)
         numpy.savez(numpy_file_name, checkerboard_in_camera_trans = checkerboard_in_camera_trans, wrist_in_body_trans = wrist_in_body_trans, camera_in_body_estimate = camera_in_body_estimate, checkerboard_to_wrist_estimate = checkerboard_to_wrist_estimate) 
 
-    
+
     checkerboard_tran_params = matrix_to_parameter_descriptor(checkerboard_to_wrist_estimate)
     camera_tran_params = matrix_to_parameter_descriptor(camera_in_body_estimate)
     parameters = numpy.hstack([checkerboard_tran_params, camera_tran_params])    
@@ -149,7 +167,16 @@ def estimate_kinect_to_base(bag_file_name):
     return  tf.transformations.translation_from_matrix(kinect_to_base), tf.transformations.quaternion_from_matrix(kinect_to_base)
 
 def main():
-    estimate_kinect_to_base('data/2014-03-21-11-52-58.bag')
+    print 'Starting to process %s' % sys.argv[1]
+    #estimate_kinect_to_base('data/2014-03-21-11-52-58.bag')
+    trans, quat = estimate_kinect_to_base(sys.argv[1])
+
+    str1 = str(trans)
+    str2 = str(quat)
+    arr1 = str1[1:-1].split()
+    arr2 = str2[1:-1].split()
+
+    print 'args="' + ', '.join(arr1 + arr2) + ' /camera_link /world 100"'
 
 if __name__ == "__main__":
     main()
