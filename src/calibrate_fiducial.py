@@ -84,7 +84,7 @@ def get_transform_lists(bag_file_name):
                 tf_child_ids.add(tf_message.child_frame_id)
                 print 'found new child frame %s' % tf_message.child_frame_id
 
-            if 'wrist_board' in tf_message.header.frame_id or 'wrist_board' in tf_message.child_frame_id:
+            if 'wrist_board' in tf_message.header.frame_id or 'wrist_board_corner' in tf_message.child_frame_id:
                 print 'found keyframe'
                 if camera_in_body_estimate is None:
                     try:
@@ -100,12 +100,11 @@ def get_transform_lists(bag_file_name):
 
                 if checkerboard_to_wrist_estimate is None:
                     try:
-
-                        listener.waitForTransform('/wrist_board','/left_lower_forearm',rospy.Time(0), rospy.Duration(.01))
-                        #(trans, rot) = listener.lookupTransform('/wrist_board','/left_lower_forearm',rospy.Time(0))
+                        listener.waitForTransform('/wrist_board','/wrist_board_corner',rospy.Time(0), rospy.Duration(.01))
+                        #(trans, rot) = listener.lookupTransform('/wrist_board','/wrist_board_corner',rospy.Time(0))
                         #print trans
                         #print rot
-                        checkerboard_to_wrist_tf = listener.lookupTransform('/wrist_board','/left_lower_forearm',rospy.Time(0))
+                        checkerboard_to_wrist_tf = listener.lookupTransform('/wrist_board','/wrist_board_corner',rospy.Time(0))
                         #print checkerboard_to_wrist_tf
                         #raw_input("press a key")
 
@@ -116,12 +115,12 @@ def get_transform_lists(bag_file_name):
                         checkerboard_to_wrist_estimate = tf_conversions.toMatrix(tf_conversions.fromTf(checkerboard_to_wrist_tf))
                         
                     except:
-                        print 'could not get wristboard to left_lower_forearm, skipping'
+                        print 'could not get wristboard to wrist_board_corner, skipping'
                         continue
                     print "got wristboard in wrist estimate"
                 try:
                     listener.waitForTransform('/wrist_board','/camera_link',rospy.Time(0), rospy.Duration(.01))
-                    listener.waitForTransform('/left_lower_forearm','/world',rospy.Time(0), rospy.Duration(.1))
+                    listener.waitForTransform('/wrist_board_corner','/world',rospy.Time(0), rospy.Duration(.1))
 
                     checkerboard_tf = listener.lookupTransform('/wrist_board','/camera_link',rospy.Time(0))
                     #print "got wristboard in camera"
@@ -129,7 +128,7 @@ def get_transform_lists(bag_file_name):
                     checkerboard_in_camera_trans.append(tf_conversions.toMatrix(tf_conversions.fromTf(checkerboard_tf)))
 
                     #print "got left wrist in world"
-                    wrist_in_body_tf = listener.lookupTransform('/left_lower_forearm','/world',rospy.Time(0))
+                    wrist_in_body_tf = listener.lookupTransform('/wrist_board_corner','/world',rospy.Time(0))
                     wrist_in_body_trans.append(tf_conversions.toMatrix(tf_conversions.fromTf(wrist_in_body_tf)))
                 except:
                     continue
