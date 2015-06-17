@@ -19,15 +19,30 @@ def init_node():
         
 
 def matrix_to_parameter_descriptor(mat):
+    """
+    @brief - Transform rotation matrix to a parameter description vector
+    
+    This is a helper function for going between rotation matrices and a parameter description 
+    that can be thrown into a nonlinear optimizer. For now, it simply uses the euler angles rotation representation contatenated with the translation. 
+    See tf.transforamtions for details
+    """
     return numpy.hstack([tf.transformations.euler_from_matrix(mat), tf.transformations.translation_from_matrix(mat)])
 
 def parameter_descriptor_to_mat(param_desc):
+    """
+    @brief - Transform parameter description vector into a rotation matrix.
+    see matrix_to_parameter_descriptor for details
+    """
     mat = tf.transformations.euler_matrix(*param_desc[:3])
     mat[:3,3] = param_desc[3:]
     return mat
 
 
 def get_error(checkerboard_to_wrist_estimate, camera_in_body_estimate, checkerboard_in_camera_trans, wrist_in_body_trans):
+    """
+    @brief - Calculates the reprojection error of the current estimate of the camera to robot and wrist checkerboard to end effector 
+    for one wrist position.
+    """
     total_error = 0
     for checkerboard_in_camera, wrist_in_body in zip(checkerboard_in_camera_trans, wrist_in_body_trans):
         checkerboard_in_body = numpy.dot( numpy.linalg.inv(wrist_in_body),numpy.linalg.inv(checkerboard_to_wrist_estimate))
@@ -42,6 +57,11 @@ def get_error(checkerboard_to_wrist_estimate, camera_in_body_estimate, checkerbo
     return total_error
 
 def get_total_error(parameters, checkerboard_in_camera_trans, wrist_in_body_trans):    
+    """
+    @brief - Calculates the total error accross all captured wrist positions of the current estimate of the camera to robot 
+    and wrist checkerboard to end effector poses
+    """
+    
     arm_to_fiducial = parameter_descriptor_to_mat(parameters[:6])
     kinect_to_base = parameter_descriptor_to_mat(parameters[6:])
     error_norm = get_error(arm_to_fiducial, kinect_to_base, checkerboard_in_camera_trans, wrist_in_body_trans)
@@ -51,6 +71,11 @@ def get_total_error(parameters, checkerboard_in_camera_trans, wrist_in_body_tran
 
 
 def get_transform_lists(bag_file_name):
+    """
+    @brief - Takes a bag file of recorded TFs expecting a transform to be published for the world checkerboard and the wrist checkerboard
+    Gets all relevant transforms using most recent transforms for each. 
+    """
+    
     init_node()
     broadcaster = tf.TransformBroadcaster()
     listener = tf.TransformListener()
@@ -137,6 +162,15 @@ def get_transform_lists(bag_file_name):
     return checkerboard_in_camera_trans, wrist_in_body_trans, camera_in_body_estimate, checkerboard_to_wrist_estimate
 
 def estimate_kinect_to_base(bag_file_name):
+    """
+    @brief - Top level function for taking a recorded set of TF poses and calculating the offset from the checkerboard representing the world
+    to the base of the robot
+    
+    Expects a guess at world to robot transform that allows transformation from camera_link to root. 
+    Expects a root frame to be part of the robot.
+    
+    """
+    
     numpy_file_name = bag_file_name.split('.')[0]
     checkerboard_in_camera_trans= []
     wrist_in_body_trans = []
